@@ -3,25 +3,41 @@ package com.netwatch.core.util
 import java.util.Locale
 import kotlin.math.abs
 
+data class FormattedQuantity(
+    val value: String,
+    val unit: String,
+) {
+    fun formatted(): String = if (unit.isBlank()) value else "$value $unit"
+}
+
 object ByteFormatter {
     private const val KB = 1024.0
     private const val MB = KB * 1024
     private const val GB = MB * 1024
     private const val TB = GB * 1024
 
-    fun formatBytes(bytes: Long?, placeholder: String = "—"): String {
-        if (bytes == null) return placeholder
-        val value = abs(bytes.toDouble())
+    fun formatBytesParts(bytes: Long?, placeholder: String = "—"): FormattedQuantity {
+        if (bytes == null) return FormattedQuantity(placeholder, "")
+        val magnitude = abs(bytes.toDouble())
         val sign = if (bytes < 0) "-" else ""
         val (scaled, unit) = when {
-            value >= TB -> value / TB to "TB"
-            value >= GB -> value / GB to "GB"
-            value >= MB -> value / MB to "MB"
-            value >= KB -> value / KB to "KB"
-            else -> value to "B"
+            magnitude >= TB -> magnitude / TB to "TB"
+            magnitude >= GB -> magnitude / GB to "GB"
+            magnitude >= MB -> magnitude / MB to "MB"
+            magnitude >= KB -> magnitude / KB to "KB"
+            else -> magnitude to "B"
         }
-        val pattern = if (unit == "B" || unit == "KB") "%.0f %s" else "%.2f %s"
-        return sign + String.format(Locale.US, pattern, scaled, unit)
+        val pattern = if (unit == "B" || unit == "KB") "%.0f" else "%.2f"
+        return FormattedQuantity(sign + String.format(Locale.US, pattern, scaled), unit)
+    }
+
+    fun formatBytes(bytes: Long?, placeholder: String = "—"): String =
+        formatBytesParts(bytes, placeholder).formatted()
+
+    fun formatSpeedParts(bytesPerSec: Long?, placeholder: String = "—"): FormattedQuantity {
+        if (bytesPerSec == null) return FormattedQuantity(placeholder, "")
+        val parts = formatBytesParts(bytesPerSec, placeholder)
+        return if (parts.unit.isEmpty()) parts else parts.copy(unit = parts.unit + "/s")
     }
 
     fun formatSpeed(bytesPerSec: Long?, placeholder: String = "—"): String {

@@ -2,6 +2,7 @@ package com.netwatch.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,6 +27,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             DashboardScreen(
                 onOpenSimPlan = { slot -> navController.navigate(Routes.simPlan(slot)) },
                 onOpenRealtime = { navController.navigate(Routes.Realtime) },
+                onOpenStatistics = { navController.navigateToTop(Routes.Statistics) },
+                onOpenSettings = { navController.navigateToTop(Routes.Settings) },
             )
         }
         composable(Routes.Statistics) { StatisticsScreen() }
@@ -52,5 +55,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         composable(Routes.About) {
             AboutScreen(onBack = { navController.popBackStack() })
         }
+    }
+}
+
+private fun NavHostController.navigateToTop(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }

@@ -21,4 +21,23 @@ class ByteFormatterTest {
         assertNull(ByteFormatter.parseGigabytes("abc"))
         assertEquals("180", ByteFormatter.toGigabytesString(180L * 1024 * 1024 * 1024))
     }
+
+    @Test
+    fun formatBytesPartsKeepsFormatBytesContract() {
+        val gb = ByteFormatter.formatBytesParts(180L * 1024 * 1024 * 1024)
+        assertEquals("180.00", gb.value)
+        assertEquals("GB", gb.unit)
+        assertEquals("180.00 GB", gb.formatted())
+        assertEquals(gb.formatted(), ByteFormatter.formatBytes(180L * 1024 * 1024 * 1024))
+
+        val none = ByteFormatter.formatBytesParts(null)
+        assertEquals("—", none.value)
+        assertEquals("", none.unit)
+        assertEquals("—", none.formatted())
+
+        val speed = ByteFormatter.formatSpeedParts(6L * 1024 * 1024)
+        assertEquals("6.00", speed.value)
+        assertEquals("MB/s", speed.unit)
+        assertEquals("6.00 MB/s", ByteFormatter.formatSpeed(6L * 1024 * 1024))
+    }
 }

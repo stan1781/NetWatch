@@ -42,4 +42,22 @@ object TimeUtils {
         val end = startOfDay(yearMonth.plusMonths(1).atDay(1))
         return start to end
     }
+
+    /**
+     * Compact relative time for home-screen alerts.
+     * Same calendar day: "刚刚" within a minute, otherwise "HH:mm".
+     */
+    fun formatRelative(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+        val then = Instant.ofEpochMilli(epochMs).atZone(zone)
+        val now = Instant.ofEpochMilli(nowMs).atZone(zone)
+        val delta = nowMs - epochMs
+        val timeOnly = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
+        return when {
+            delta < 60_000L -> "刚刚"
+            then.toLocalDate() == now.toLocalDate() -> then.format(timeOnly)
+            then.toLocalDate() == now.toLocalDate().minusDays(1) -> "昨天 " + then.format(timeOnly)
+            then.year == now.year -> then.format(DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA))
+            else -> formatDateTime(epochMs)
+        }
+    }
 }

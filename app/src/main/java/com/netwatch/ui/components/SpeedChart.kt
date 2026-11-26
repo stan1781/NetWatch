@@ -10,15 +10,20 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.netwatch.domain.model.SpeedSample
 
 @Composable
-fun SpeedChart(samples: List<SpeedSample>, modifier: Modifier = Modifier) {
+fun SpeedChart(
+    samples: List<SpeedSample>,
+    modifier: Modifier = Modifier,
+    height: Dp = 140.dp,
+) {
     val lineColor = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.tertiary
     val grid = MaterialTheme.colorScheme.outlineVariant
-    Canvas(modifier = modifier.fillMaxWidth().height(140.dp)) {
+    Canvas(modifier = modifier.fillMaxWidth().height(height)) {
         val data = samples.takeLast(60)
         if (data.size < 2) return@Canvas
         val max = data.maxOf { maxOf(it.displayDownloadBytesPerSec, it.displayUploadBytesPerSec, 1L) }.toFloat()
