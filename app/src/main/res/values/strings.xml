@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NetWatch</string>
+    <string name="widget_label">NetWatch 流量概览</string>
+    <string name="notification_channel_monitor">流量监控</string>
+    <string name="notification_channel_alerts">流量预警</string>
+    <string name="notification_monitor_title">NetWatch 正在监控流量</string>
+    <string name="nav_dashboard">首页</string>
+    <string name="nav_statistics">统计</string>
+    <string name="nav_settings">设置</string>
+</resources>
