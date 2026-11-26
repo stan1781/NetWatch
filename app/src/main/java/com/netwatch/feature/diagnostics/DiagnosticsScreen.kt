@@ -20,8 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.netwatch.BuildConfig
 import com.netwatch.di.LocalAppContainer
 import com.netwatch.service.TrafficMonitorService
@@ -35,13 +35,29 @@ import kotlinx.coroutines.withContext
 @Composable
 fun DiagnosticsScreen(onBack: () -> Unit) {
     val container = LocalAppContainer.current
-    val context = LocalContext.current
     val permissions = container.permissionChecker
     var probe by remember { mutableStateOf("正在检测…") }
     var simText by remember { mutableStateOf("正在检测…") }
+    var pathText by remember { mutableStateOf("正在检测…") }
+    val sample by TrafficMonitorService.latestSample.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         probe = withContext(Dispatchers.IO) { container.networkStatsRepository.probe() }
+        val network = container.networkStateMonitor.current(
+            isTethering = container.hotspotMonitor.currentStatus().isTethering,
+        )
+        pathText = buildString {
+            append("当前上网路径：${network.transportLabel}\n")
+            append("计入套餐 / 移动预警：${if (network.billableMobile) "是" else "否"}\n")
+            append("VPN：${if (network.path.isVpn) "是" else "否"}\n")
+            append("热点：${if (network.path.isTethering) "是" else "否"}\n")
+            append("同时使用通用移动数据（双通道）：${if (network.path.hasConcurrentBillableCellular) "是" else "否"}\n")
+            append("已验证互联网：${if (network.isValidated) "是" else "否"}")
+            if (network.path.notes.isNotEmpty()) {
+                append("\n")
+                append(network.path.notes.joinToString("\n"))
+            }
+        }
         val sim = container.simManager.current()
         simText = buildString {
             append("默认数据订阅 ID：${sim.defaultDataSubscriptionId ?: "无"}\n")
@@ -91,13 +107,28 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item { InfoCard { Text(probe) } }
             item { SectionTitle("SIM / 订阅") }
             item { InfoCard { Text(simText) } }
+            item { SectionTitle("当前上网路径") }
+            item {
+                InfoCard {
+                    Text(pathText)
+                    sample?.let {
+                        KeyValueRow("采样路径", it.displayPathLabel)
+                        KeyValueRow("移动计数增量", "${it.mobileDelta.total} B")
+                        KeyValueRow("计入套餐的增量", "${it.billableMobileDelta.total} B")
+                        if (it.mobileCountersUnreliable) {
+                            Text("当前上网路径为 ${it.displayPathLabel}，但 TrafficStats 移动计数仍在增加，已忽略，不计入套餐与预警。")
+                        }
+                    }
+                }
+            }
             item { SectionTitle("能力说明") }
             item {
                 InfoCard {
                     Text("● 全设备移动 / Wi-Fi / 分应用统计：在授予使用情况访问后，来自 NetworkStatsManager，标记为“实测”。")
                     Text("● 按 SIM 卡拆分：公开 API 不能向第三方应用提供 subscriberId，也无法按订阅查询官方账单。本应用按默认数据卡期间的移动数据增量归属，标记为“估算”。")
                     Text("● 定向 / 不计费流量：公开 API 不可用。")
-                    Text("● 实时速度：TrafficStats 计数差，标记为“实测”。切换默认数据卡会重置基线。")
+                    Text("● 实时速度：TrafficStats 计数差，标记为“实测”。Wi-Fi / 以太网上网（含 VPN 下层为 Wi-Fi）时，界面显示该路径速度；这些流量不计入套餐，也不会触发移动或套餐预警。")
+                    Text("● 若在 Wi-Fi 下 TrafficStats 移动计数仍增加，会视为不可靠，不计入套餐。IMS 蜂窝承载不算正在使用移动数据。双通道（WLAN+）下的真实移动流量仍会计入。热点期间仍按移动数据计算。")
                     Text("● 热点：TetheringManager 识别开关与接口；会话流量按开启期间移动数据增量估算。")
                     Text("● 不会读取 IMSI 或电话号码。")
                 }

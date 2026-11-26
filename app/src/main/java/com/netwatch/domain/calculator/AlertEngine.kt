@@ -52,8 +52,12 @@ class AlertEngine {
         val dt = lastSampleElapsed?.let { sample.elapsedRealtimeMs - it }?.coerceAtLeast(0L) ?: settings.sampleIntervalMs.toLong()
         lastSampleElapsed = sample.elapsedRealtimeMs
 
+        // Only billable mobile traffic can drive plan/speed/rolling alerts.
+        // Wi-Fi, Ethernet, and VPN-over-Wi-Fi samples must not contribute,
+        // even if TrafficStats mobile counters still increase.
         if (settings.downloadSpeedMonitoringEnabled &&
-            sample.downloadBytesPerSec >= settings.downloadAlertBytesPerSec
+            sample.path.billableMobile &&
+            sample.billableDownloadBytesPerSec >= settings.downloadAlertBytesPerSec
         ) {
             highSpeedStreakMs += dt
         } else {
@@ -67,7 +71,7 @@ class AlertEngine {
                     id = id++,
                     type = AlertType.HIGH_DOWNLOAD_SPEED,
                     triggeredAtMs = nowMs,
-                    triggerSpeedBytesPerSec = sample.downloadBytesPerSec,
+                    triggerSpeedBytesPerSec = sample.billableDownloadBytesPerSec,
                     triggerVolumeBytes = null,
                     planPercent = null,
                     slotIndex = sample.defaultDataSlotIndex,
@@ -80,8 +84,11 @@ class AlertEngine {
             }
         }
 
-        val rollingBytes = recent.sumOf { it.mobileDelta.total }
-        if (rollingBytes >= settings.rollingAlertBytes && recent.size >= 2) {
+        val rollingBytes = recent.sumOf { it.billableMobileDelta.total }
+        if (sample.path.billableMobile &&
+            rollingBytes >= settings.rollingAlertBytes &&
+            recent.size >= 2
+        ) {
             if (canFire(key(AlertType.ROLLING_WINDOW), nowMs, settings.notificationCooldownSec)) {
                 events += AlertEvent(
                     id = id++,
@@ -97,6 +104,10 @@ class AlertEngine {
                 )
                 markFired(key(AlertType.ROLLING_WINDOW), nowMs)
             }
+        }
+
+        if (!sample.path.billableMobile) {
+            return events
         }
 
         for (plan in planUsages) {

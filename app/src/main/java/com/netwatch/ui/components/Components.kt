@@ -47,17 +47,29 @@ fun InfoCard(
 }
 
 @Composable
-fun ConfidenceChip(confidence: DataConfidence, scope: DataScope? = null) {
-    val label = when (confidence) {
-        DataConfidence.REAL -> "实测"
-        DataConfidence.ESTIMATED -> "估算"
-        DataConfidence.UNAVAILABLE -> "不可用"
-    } + when (scope) {
-        DataScope.DEVICE_WIDE -> " · 全设备"
-        DataScope.ATTRIBUTED_TO_DEFAULT_DATA_SIM -> " · 按默认数据卡归属"
-        DataScope.PER_APP -> " · 按应用"
-        DataScope.HOTSPOT_SESSION -> " · 热点会话"
-        DataScope.UNKNOWN, null -> ""
+fun ConfidenceChip(
+    confidence: DataConfidence,
+    scope: DataScope? = null,
+    userCalibrated: Boolean = false,
+) {
+    val label = buildString {
+        append(
+            when (confidence) {
+                DataConfidence.REAL -> "实测"
+                DataConfidence.ESTIMATED -> "估算"
+                DataConfidence.UNAVAILABLE -> "不可用"
+            },
+        )
+        if (userCalibrated) append(" · 手动校准")
+        append(
+            when (scope) {
+                DataScope.DEVICE_WIDE -> " · 全设备"
+                DataScope.ATTRIBUTED_TO_DEFAULT_DATA_SIM -> " · 按默认数据卡归属"
+                DataScope.PER_APP -> " · 按应用"
+                DataScope.HOTSPOT_SESSION -> " · 热点会话"
+                DataScope.UNKNOWN, null -> ""
+            },
+        )
     }
     SuggestionChip(onClick = {}, enabled = false, label = { Text(label) })
 }

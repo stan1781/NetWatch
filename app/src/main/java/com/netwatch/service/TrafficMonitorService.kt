@@ -116,18 +116,23 @@ class TrafficMonitorService : LifecycleService() {
                     lastDefaultSub = defaultSub
                     container.simManager.persistIdentityChanges(sim)
                 }
-                val sample = if (resetNeeded) {
+                val tethering = lastTethering || container.hotspotMonitor.currentStatus().isTethering
+                val network = container.networkStateMonitor.current(isTethering = tethering)
+                val raw = if (resetNeeded) {
                     sampler.sample(now, sim.defaultDataSubscriptionId, sim.defaultDataSlotIndex)
                         .copy(baselineReset = true)
                 } else {
                     sampler.sample(now, sim.defaultDataSubscriptionId, sim.defaultDataSlotIndex)
                 }
+                val sample = raw.copy(path = network.path)
 
                 samples.value = (samples.value + sample).takeLast(MAX_SAMPLES)
                 latestSample.value = sample
 
                 if (!sample.baselineReset) {
-                    container.networkStatsRepository.recordAttributedDelta(sample)
+                    if (sample.path.billableMobile) {
+                        container.networkStatsRepository.recordAttributedDelta(sample)
+                    }
                     if (settings.hotspotMonitoringEnabled) {
                         container.hotspotMonitor.accumulate(
                             TrafficStats.getMobileRxBytes(),

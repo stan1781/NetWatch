@@ -48,7 +48,8 @@ object WidgetDataProvider {
             val used = ByteFormatter.formatBytes(plan.usedBytes)
             val cap = ByteFormatter.formatBytes(plan.generalCapacityBytes)
             val percent = ByteFormatter.formatPercent(plan.usagePercent)
-            "SIM ${plan.slotIndex + 1} 已用 $used / $cap（$percent，估算）"
+            val quality = if (plan.userCalibrated) "手动校准" else "估算"
+            "SIM ${plan.slotIndex + 1} 已用 $used / $cap（$percent，$quality）"
         }
         val todayLine = if (today.confidence == DataConfidence.UNAVAILABLE) {
             "今日移动数据：不可用（需使用情况访问权限）"
@@ -58,11 +59,16 @@ object WidgetDataProvider {
         return WidgetUiData(
             defaultSimLabel = defaultCard?.let { "${it.label}（默认数据卡）" } ?: "默认数据卡：未识别",
             carrier = defaultCard?.carrierName ?: defaultCard?.displayName ?: "运营商未知",
-            downloadSpeed = "↓ ${ByteFormatter.formatSpeed(sample?.downloadBytesPerSec)}",
-            uploadSpeed = "↑ ${ByteFormatter.formatSpeed(sample?.uploadBytesPerSec)}",
+            downloadSpeed = "↓ ${ByteFormatter.formatSpeed(sample?.displayDownloadBytesPerSec)}",
+            uploadSpeed = "↑ ${ByteFormatter.formatSpeed(sample?.displayUploadBytesPerSec)}",
             todayMobile = todayLine,
             planLine = planLine,
-            confidenceNote = "速度为 TrafficStats 实测；分卡套餐为估算",
+            confidenceNote = if (plan?.userCalibrated == true) {
+                val path = sample?.displayPathLabel?.let { "当前为 $it。" } ?: ""
+                path + "速度为 TrafficStats 实测；分卡套餐为手动校准加估算增量，非运营商官方数据"
+            } else {
+                "速度为 TrafficStats 实测；分卡套餐为估算"
+            },
         )
     }
 }

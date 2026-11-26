@@ -60,12 +60,13 @@ class MonitoringNotification(private val context: Context) {
         val speed = if (sample == null) {
             "正在初始化采样…"
         } else {
-            "↓ ${ByteFormatter.formatSpeed(sample.downloadBytesPerSec)}  ↑ ${ByteFormatter.formatSpeed(sample.uploadBytesPerSec)}"
+            val label = sample.displayPathLabel
+            "↓ ${ByteFormatter.formatSpeed(sample.displayDownloadBytesPerSec)}  ↑ ${ByteFormatter.formatSpeed(sample.displayUploadBytesPerSec)}　$label"
         }
         return NotificationCompat.Builder(context, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.notification_monitor_title))
-            .setContentText("$speed　今日 $todayTotal")
+            .setContentText("$speed　今日移动 $todayTotal")
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

@@ -60,7 +60,7 @@ class DashboardViewModel(private val container: AppContainer) : ViewModel() {
                 val (settings, sim, network, alerts) = a
                 val (sample, samples, running) = b
                 val cutoff = (sample?.elapsedRealtimeMs ?: 0) - settings.rollingWindowSeconds * 1000L
-                val rolling = samples.filter { it.elapsedRealtimeMs >= cutoff }.sumOf { it.mobileDelta.total }
+                val rolling = samples.filter { it.elapsedRealtimeMs >= cutoff }.sumOf { it.billableMobileDelta.total }
                 val plans = container.observePlanUsageUseCase.compute(sim)
                 val today = container.networkStatsRepository.devicePeriod(
                     NetworkKind.MOBILE,

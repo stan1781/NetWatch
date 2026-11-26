@@ -30,7 +30,45 @@ data class SpeedSample(
     val mobileCountersSupported: Boolean,
     val baselineReset: Boolean,
     val confidence: DataConfidence,
-)
+    val path: InternetPathState = InternetPathState.Mobile,
+) {
+    /** Mobile bytes that may be attributed to the SIM plan and used for alerts. */
+    val billableMobileDelta: ByteVolume
+        get() = if (path.billableMobile) mobileDelta else ByteVolume(0, 0)
+
+    val billableDownloadBytesPerSec: Long
+        get() = if (path.billableMobile) downloadBytesPerSec else 0L
+
+    val billableUploadBytesPerSec: Long
+        get() = if (path.billableMobile) uploadBytesPerSec else 0L
+
+    /**
+     * Speed to show in the monitor notification and realtime UI.
+     * On Wi-Fi / Ethernet this is the device total, labeled as that path,
+     * not as plan/mobile speed.
+     */
+    val displayDownloadBytesPerSec: Long
+        get() = when (path.path) {
+            InternetPath.WIFI, InternetPath.ETHERNET -> totalDownloadBytesPerSec
+            else -> downloadBytesPerSec
+        }
+
+    val displayUploadBytesPerSec: Long
+        get() = when (path.path) {
+            InternetPath.WIFI, InternetPath.ETHERNET -> totalUploadBytesPerSec
+            else -> uploadBytesPerSec
+        }
+
+    val displayPathLabel: String get() = path.transportLabel
+
+    /**
+     * TrafficStats mobile counters increased while the internet path is not
+     * billable mobile (typical on some OEMs or with a standing IMS bearer).
+     * These bytes must not be counted toward the plan.
+     */
+    val mobileCountersUnreliable: Boolean
+        get() = !path.billableMobile && mobileDelta.total > 0L
+}
 
 data class TrafficPeriod(
     val startMs: Long,

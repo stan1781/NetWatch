@@ -77,6 +77,10 @@ object SettingsPreferences {
             resetDayOfMonth = unsetToNull(prefs[longPreferencesKey(prefix + "reset")])
                 ?.toInt()
                 ?: fallback.resetDayOfMonth.takeIf { prefs[longPreferencesKey(prefix + "reset")] == null },
+            calibratedUsedBytes = unsetToNull(prefs[longPreferencesKey(prefix + "calibrated_used")]),
+            calibratedDirectedUsedBytes = unsetToNull(prefs[longPreferencesKey(prefix + "calibrated_directed_used")]),
+            calibrationAtMs = unsetToNull(prefs[longPreferencesKey(prefix + "calibration_at")]),
+            calibrationBaselineAttributedBytes = unsetToNull(prefs[longPreferencesKey(prefix + "calibration_baseline")]),
         )
     }
 
@@ -93,6 +97,10 @@ object SettingsPreferences {
             prefs[longPreferencesKey(prefix + "general")] = aligned.generalCapacityBytes ?: UNSET
             prefs[longPreferencesKey(prefix + "directed")] = aligned.directedCapacityBytes ?: UNSET
             prefs[longPreferencesKey(prefix + "reset")] = aligned.resetDayOfMonth?.toLong() ?: UNSET
+            prefs[longPreferencesKey(prefix + "calibrated_used")] = aligned.calibratedUsedBytes ?: UNSET
+            prefs[longPreferencesKey(prefix + "calibrated_directed_used")] = aligned.calibratedDirectedUsedBytes ?: UNSET
+            prefs[longPreferencesKey(prefix + "calibration_at")] = aligned.calibrationAtMs ?: UNSET
+            prefs[longPreferencesKey(prefix + "calibration_baseline")] = aligned.calibrationBaselineAttributedBytes ?: UNSET
         }
     }
 

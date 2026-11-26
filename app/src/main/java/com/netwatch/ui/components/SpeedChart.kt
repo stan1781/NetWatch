@@ -21,7 +21,7 @@ fun SpeedChart(samples: List<SpeedSample>, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.fillMaxWidth().height(140.dp)) {
         val data = samples.takeLast(60)
         if (data.size < 2) return@Canvas
-        val max = data.maxOf { maxOf(it.downloadBytesPerSec, it.uploadBytesPerSec, 1L) }.toFloat()
+        val max = data.maxOf { maxOf(it.displayDownloadBytesPerSec, it.displayUploadBytesPerSec, 1L) }.toFloat()
         val step = size.width / (data.size - 1).coerceAtLeast(1)
         for (i in 1..3) {
             val y = size.height * i / 4f
@@ -36,7 +36,7 @@ fun SpeedChart(samples: List<SpeedSample>, modifier: Modifier = Modifier) {
             }
             return p
         }
-        drawPath(path { it.downloadBytesPerSec }, lineColor, style = Stroke(width = 4f, cap = StrokeCap.Round))
-        drawPath(path { it.uploadBytesPerSec }, secondary, style = Stroke(width = 4f, cap = StrokeCap.Round))
+        drawPath(path { it.displayDownloadBytesPerSec }, lineColor, style = Stroke(width = 4f, cap = StrokeCap.Round))
+        drawPath(path { it.displayUploadBytesPerSec }, secondary, style = Stroke(width = 4f, cap = StrokeCap.Round))
     }
 }

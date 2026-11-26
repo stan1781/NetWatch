@@ -20,6 +20,7 @@ import com.netwatch.core.util.ByteFormatter
 import com.netwatch.core.util.TimeUtils
 import com.netwatch.di.LocalAppContainer
 import com.netwatch.domain.model.AlertType
+import com.netwatch.domain.model.InternetPath
 import com.netwatch.domain.model.DataConfidence
 import com.netwatch.domain.model.DataScope
 import com.netwatch.domain.model.PlanUsage
@@ -66,7 +67,17 @@ fun DashboardScreen(
                 }
                 KeyValueRow("默认数据卡", current?.label ?: "未识别")
                 KeyValueRow("运营商", current?.carrierName ?: current?.displayName ?: "不可用")
-                KeyValueRow("移动网络", if (sim?.mobileConnected == true) "已连接" else (network?.transportLabel ?: "未知"))
+                KeyValueRow("当前网络", network?.transportLabel ?: "未知")
+                KeyValueRow(
+                    "移动数据",
+                    when {
+                        network?.path?.path == InternetPath.MOBILE -> "正在用于上网"
+                        network?.path?.hasConcurrentBillableCellular == true -> "同时使用（双通道）"
+                        network?.path?.isTethering == true -> "热点共享中"
+                        sim?.mobileConnected == true -> "已连接，但不是当前上网路径（例如 IMS）"
+                        else -> "未用于上网"
+                    },
+                )
                 KeyValueRow("识别状态", current?.identificationStatus?.name ?: "UNKNOWN")
                 KeyValueRow("订阅 ID", current?.subscriptionId?.toString() ?: "—")
                 KeyValueRow("卡槽编号", current?.slotIndex?.toString() ?: "—")
@@ -80,12 +91,12 @@ fun DashboardScreen(
             InfoCard(onClick = onOpenRealtime) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
-                        Text("下载（移动）", style = MaterialTheme.typography.labelMedium)
-                        Text(ByteFormatter.formatSpeed(sample?.downloadBytesPerSec), style = MaterialTheme.typography.headlineSmall)
+                        Text("下载（${sample?.displayPathLabel ?: "移动数据"}）", style = MaterialTheme.typography.labelMedium)
+                        Text(ByteFormatter.formatSpeed(sample?.displayDownloadBytesPerSec), style = MaterialTheme.typography.headlineSmall)
                     }
                     Column {
-                        Text("上传（移动）", style = MaterialTheme.typography.labelMedium)
-                        Text(ByteFormatter.formatSpeed(sample?.uploadBytesPerSec), style = MaterialTheme.typography.headlineSmall)
+                        Text("上传（${sample?.displayPathLabel ?: "移动数据"}）", style = MaterialTheme.typography.labelMedium)
+                        Text(ByteFormatter.formatSpeed(sample?.displayUploadBytesPerSec), style = MaterialTheme.typography.headlineSmall)
                     }
                 }
                 KeyValueRow(
@@ -93,7 +104,10 @@ fun DashboardScreen(
                     ByteFormatter.formatBytes(state.rollingWindowBytes),
                 )
                 SpeedChart(state.samples)
-                Text("蓝线为下载，黄线为上传。点击查看详情。采样来自 TrafficStats。", style = MaterialTheme.typography.bodySmall)
+                Text("蓝线为下载，黄线为上传，速度按当前上网路径显示。点击查看详情。采样来自 TrafficStats。", style = MaterialTheme.typography.bodySmall)
+                if (sample?.mobileCountersUnreliable == true) {
+                    Text("当前不是移动上网，但 TrafficStats 移动计数仍有增量，已忽略，不计入套餐与预警。", style = MaterialTheme.typography.bodySmall)
+                }
                 if (sample?.mobileCountersSupported == false) {
                     Text("本机移动计数器不可用，已改用全设备计数估算。", style = MaterialTheme.typography.bodySmall)
                 }
@@ -170,10 +184,16 @@ private fun PlanOverviewCard(card: SimCard, plan: PlanUsage, onClick: () -> Unit
     InfoCard(onClick = onClick) {
         Text("${card.label}  ·  $role", style = MaterialTheme.typography.titleSmall)
         Text(card.carrierName ?: card.displayName ?: "运营商未知", style = MaterialTheme.typography.bodySmall)
-        KeyValueRow("本周期已用", ByteFormatter.formatBytes(plan.usedBytes))
+        KeyValueRow(
+            if (plan.userCalibrated) "本周期已用（手动校准）" else "本周期已用",
+            ByteFormatter.formatBytes(plan.usedBytes),
+        )
         KeyValueRow("通用套餐", ByteFormatter.formatBytes(plan.generalCapacityBytes))
         KeyValueRow("定向套餐", ByteFormatter.formatBytes(plan.directedCapacityBytes))
-        KeyValueRow("剩余（估算）", ByteFormatter.formatBytes(plan.remainingGeneralBytes))
+        KeyValueRow(
+            if (plan.userCalibrated) "通用剩余（手动校准）" else "通用剩余（估算）",
+            ByteFormatter.formatBytes(plan.remainingGeneralBytes),
+        )
         KeyValueRow("占用比例", ByteFormatter.formatPercent(plan.usagePercent))
         val percent = plan.usagePercent
         if (percent != null) {
@@ -182,7 +202,7 @@ private fun PlanOverviewCard(card: SimCard, plan: PlanUsage, onClick: () -> Unit
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        ConfidenceChip(plan.usedConfidence, plan.usedScope)
+        ConfidenceChip(plan.usedConfidence, plan.usedScope, userCalibrated = plan.userCalibrated)
         NoteText(plan.notes.take(2))
     }
 }

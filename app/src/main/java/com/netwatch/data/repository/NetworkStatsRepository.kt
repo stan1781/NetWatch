@@ -31,7 +31,8 @@ class NetworkStatsRepository(
 
     suspend fun recordAttributedDelta(sample: SpeedSample) {
         if (sample.baselineReset) return
-        val mobile = sample.mobileDelta
+        if (!sample.path.billableMobile) return
+        val mobile = sample.billableMobileDelta
         if (mobile.total <= 0L) return
         val identity = sample.defaultDataSubscriptionId?.let { "sub:$it" }
             ?: sample.defaultDataSlotIndex?.let { "slot:$it:unknown" }

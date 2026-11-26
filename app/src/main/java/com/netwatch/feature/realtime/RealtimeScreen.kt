@@ -37,7 +37,7 @@ fun RealtimeScreen(onBack: () -> Unit) {
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
     val window = settings?.rollingWindowSeconds ?: 60
     val cutoff = (sample?.elapsedRealtimeMs ?: 0) - window * 1000L
-    val rolling = samples.filter { it.elapsedRealtimeMs >= cutoff }.sumOf { it.mobileDelta.total }
+    val rolling = samples.filter { it.elapsedRealtimeMs >= cutoff }.sumOf { it.billableMobileDelta.total }
 
     Scaffold(
         topBar = {
@@ -60,6 +60,9 @@ fun RealtimeScreen(onBack: () -> Unit) {
                     KeyValueRow("采样间隔", "${settings?.sampleIntervalMs ?: "—"} ms")
                     KeyValueRow("默认数据卡槽", sample?.defaultDataSlotIndex?.let { "SIM ${it + 1}" } ?: "未知")
                     KeyValueRow("订阅 ID", sample?.defaultDataSubscriptionId?.toString() ?: "—")
+                    KeyValueRow("当前网络", sample?.displayPathLabel ?: "未知")
+                    KeyValueRow("下载（${sample?.displayPathLabel ?: "当前网络"}）", ByteFormatter.formatSpeed(sample?.displayDownloadBytesPerSec))
+                    KeyValueRow("上传（${sample?.displayPathLabel ?: "当前网络"}）", ByteFormatter.formatSpeed(sample?.displayUploadBytesPerSec))
                     KeyValueRow("移动下载", ByteFormatter.formatSpeed(sample?.downloadBytesPerSec))
                     KeyValueRow("移动上传", ByteFormatter.formatSpeed(sample?.uploadBytesPerSec))
                     KeyValueRow("全设备下载", ByteFormatter.formatSpeed(sample?.totalDownloadBytesPerSec))
@@ -67,7 +70,10 @@ fun RealtimeScreen(onBack: () -> Unit) {
                     KeyValueRow("最近 ${window} 秒移动流量", ByteFormatter.formatBytes(rolling))
                     SpeedChart(samples)
                     ConfidenceChip(sample?.confidence ?: DataConfidence.UNAVAILABLE)
-                    Text("速度来自 TrafficStats 计数差。切换默认数据卡时会重置基线，避免出现虚假尖峰。预警阈值请到设置中修改。", style = MaterialTheme.typography.bodySmall)
+                    Text("速度来自 TrafficStats 计数差。切换默认数据卡时会重置基线，避免出现虚假尖峰。Wi-Fi 或以太网上网时，前台通知和图表显示该路径速度，不会把这些流量计入套餐或触发移动/套餐预警。预警阈值请到设置中修改。", style = MaterialTheme.typography.bodySmall)
+                    if (sample?.mobileCountersUnreliable == true) {
+                        Text("当前上网路径不是移动数据，但 TrafficStats 移动计数仍有增量，已忽略，不计入套餐与预警。", style = MaterialTheme.typography.bodySmall)
+                    }
                     if (sample?.mobileCountersSupported == false) {
                         Text("本机不支持移动计数器。", style = MaterialTheme.typography.bodySmall)
                     }
