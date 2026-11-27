@@ -2,16 +2,39 @@ package com.netwatch.core.network
 
 import android.net.TrafficStats
 import android.os.SystemClock
+import com.netwatch.domain.calculator.TrafficPlausibility
 import com.netwatch.domain.model.ByteVolume
 import com.netwatch.domain.model.DataConfidence
 import com.netwatch.domain.model.SpeedSample
+
+/**
+ * Public [TrafficStats] counters used by [TrafficStatsSampler].
+ * Production uses [SystemTrafficStatsSource]; tests inject a fake.
+ */
+interface TrafficStatsSource {
+    fun mobileRxBytes(): Long
+    fun mobileTxBytes(): Long
+    fun totalRxBytes(): Long
+    fun totalTxBytes(): Long
+    fun elapsedRealtime(): Long
+}
+
+object SystemTrafficStatsSource : TrafficStatsSource {
+    override fun mobileRxBytes(): Long = TrafficStats.getMobileRxBytes()
+    override fun mobileTxBytes(): Long = TrafficStats.getMobileTxBytes()
+    override fun totalRxBytes(): Long = TrafficStats.getTotalRxBytes()
+    override fun totalTxBytes(): Long = TrafficStats.getTotalTxBytes()
+    override fun elapsedRealtime(): Long = SystemClock.elapsedRealtime()
+}
 
 /**
  * Instantaneous rates from [TrafficStats] public counters.
  * Call [resetBaseline] whenever the default data SIM changes so a counter
  * discontinuity cannot appear as a fake speed spike.
  */
-class TrafficStatsSampler {
+class TrafficStatsSampler(
+    private val source: TrafficStatsSource = SystemTrafficStatsSource,
+) {
     private var lastMobileRx = UNSUPPORTED
     private var lastMobileTx = UNSUPPORTED
     private var lastTotalRx = UNSUPPORTED
@@ -20,11 +43,11 @@ class TrafficStatsSampler {
     private var primed = false
 
     fun resetBaseline() {
-        lastMobileRx = TrafficStats.getMobileRxBytes()
-        lastMobileTx = TrafficStats.getMobileTxBytes()
-        lastTotalRx = TrafficStats.getTotalRxBytes()
-        lastTotalTx = TrafficStats.getTotalTxBytes()
-        lastElapsed = SystemClock.elapsedRealtime()
+        lastMobileRx = source.mobileRxBytes()
+        lastMobileTx = source.mobileTxBytes()
+        lastTotalRx = source.totalRxBytes()
+        lastTotalTx = source.totalTxBytes()
+        lastElapsed = source.elapsedRealtime()
         primed = true
     }
 
@@ -33,11 +56,11 @@ class TrafficStatsSampler {
         defaultDataSubscriptionId: Int?,
         defaultDataSlotIndex: Int?,
     ): SpeedSample {
-        val elapsed = SystemClock.elapsedRealtime()
-        val mobileRx = TrafficStats.getMobileRxBytes()
-        val mobileTx = TrafficStats.getMobileTxBytes()
-        val totalRx = TrafficStats.getTotalRxBytes()
-        val totalTx = TrafficStats.getTotalTxBytes()
+        val elapsed = source.elapsedRealtime()
+        val mobileRx = source.mobileRxBytes()
+        val mobileTx = source.mobileTxBytes()
+        val totalRx = source.totalRxBytes()
+        val totalTx = source.totalTxBytes()
         val mobileSupported = mobileRx != UNSUPPORTED && mobileTx != UNSUPPORTED
 
         if (!primed || lastElapsed <= 0L || elapsed <= lastElapsed) {
@@ -64,8 +87,9 @@ class TrafficStatsSampler {
             )
         }
 
-        val dtSec = (elapsed - lastElapsed).coerceAtLeast(1L) / 1000.0
-        val mobileDelta = if (mobileSupported && lastMobileRx != UNSUPPORTED) {
+        val dtMs = elapsed - lastElapsed
+        val dtSec = dtMs.coerceAtLeast(1L) / 1000.0
+        var mobileDelta = if (mobileSupported && lastMobileRx != UNSUPPORTED) {
             ByteVolume(
                 rxBytes = delta(mobileRx, lastMobileRx),
                 txBytes = delta(mobileTx, lastMobileTx),
@@ -73,13 +97,22 @@ class TrafficStatsSampler {
         } else {
             ByteVolume(0, 0)
         }
-        val totalDelta = if (totalRx != UNSUPPORTED && lastTotalRx != UNSUPPORTED) {
+        var totalDelta = if (totalRx != UNSUPPORTED && lastTotalRx != UNSUPPORTED) {
             ByteVolume(
                 rxBytes = delta(totalRx, lastTotalRx),
                 txBytes = delta(totalTx, lastTotalTx),
             )
         } else {
             ByteVolume(0, 0)
+        }
+
+        var discontinuity = false
+        if (TrafficPlausibility.isImplausibleDelta(mobileDelta.total, dtMs)) {
+            mobileDelta = ByteVolume(0, 0)
+            discontinuity = true
+        }
+        if (TrafficPlausibility.isImplausibleDelta(totalDelta.total, dtMs)) {
+            totalDelta = ByteVolume(0, 0)
         }
 
         lastMobileRx = mobileRx
@@ -100,7 +133,7 @@ class TrafficStatsSampler {
             defaultDataSubscriptionId = defaultDataSubscriptionId,
             defaultDataSlotIndex = defaultDataSlotIndex,
             mobileCountersSupported = mobileSupported,
-            baselineReset = false,
+            baselineReset = discontinuity,
             confidence = if (mobileSupported) DataConfidence.REAL else DataConfidence.ESTIMATED,
         )
     }

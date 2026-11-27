@@ -12,6 +12,7 @@ import com.netwatch.domain.model.PlanUsage
 import com.netwatch.domain.model.SimRole
 import com.netwatch.domain.model.SpeedSample
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -221,6 +222,75 @@ class AlertEngineTest {
         val later = engine.onSample(sample(3000, 1, 1, path = InternetPathState.Mobile), tight, emptyList(), 3_000, 1)
         assertTrue(later.none { it.type == AlertType.ROLLING_WINDOW })
     }
+
+    // Defense-in-depth: even if a physically impossible TrafficStats jump
+    // reaches the engine with baselineReset=false, it must not fire.
+    // Cap is 2 GiB/s (~17.2 Gbps): above real 5G/hotspot bursts (tens of MB/s)
+    // and below the 6–18 GiB single-second jumps that caused false alerts.
+    private val jump18Gb = 19_502_433_852L // 2026-11-27 09:38 event, 18.16 GiB
+
+    @Test
+    fun impossibleOneSecondTrafficJumpDoesNotFireRollingWindow() {
+        val engine = AlertEngine()
+        engine.onSample(sample(1000, 1, 1_000), settings, emptyList(), 1_000, 1)
+        val events = engine.onSample(
+            sample(elapsed = 2000, down = jump18Gb, rx = jump18Gb),
+            settings,
+            emptyList(),
+            2_000,
+            1,
+        )
+        assertTrue(events.none { it.type == AlertType.ROLLING_WINDOW })
+    }
+
+    @Test
+    fun realisticFortyMegabyteBurstCanFireRollingWindow() {
+        val engine = AlertEngine()
+        val tight = settings.copy(
+            rollingAlertBytes = 20L * 1024 * 1024,
+            rollingWindowSeconds = 60,
+        )
+        val burst = 40L * 1024 * 1024
+        engine.onSample(sample(1000, 1, 1_000), tight, emptyList(), 1_000, 1)
+        val events = engine.onSample(
+            sample(elapsed = 2000, down = burst, rx = burst),
+            tight,
+            emptyList(),
+            2_000,
+            1,
+        )
+        assertTrue(events.any { it.type == AlertType.ROLLING_WINDOW })
+        assertEquals(burst + 1_000, events.first { it.type == AlertType.ROLLING_WINDOW }.triggerVolumeBytes)
+    }
+
+    @Test
+    fun realisticHotspotBurstsOverWindowCanFireRollingWindow() {
+        val engine = AlertEngine()
+        // Mirrors the 11-26 19:09 event: 30–50 MB samples summing to ~0.29 GB
+        // over a 60s window, just above the default 300 MB threshold.
+        val bursts = listOf(
+            32L * 1024 * 1024,
+            45L * 1024 * 1024,
+            52L * 1024 * 1024,
+            33L * 1024 * 1024,
+            54L * 1024 * 1024,
+            25L * 1024 * 1024,
+            24L * 1024 * 1024,
+            50L * 1024 * 1024,
+        )
+        val all = mutableListOf<com.netwatch.domain.model.AlertEvent>()
+        bursts.forEachIndexed { i, rx ->
+            val elapsed = (i + 1) * 1000L
+            all += engine.onSample(sample(elapsed, down = rx, rx = rx), settings, emptyList(), elapsed, 1)
+        }
+        val expected = bursts.sum()
+        assertTrue(expected > settings.rollingAlertBytes)
+        assertTrue(all.any { it.type == AlertType.ROLLING_WINDOW })
+        val fired = all.first { it.type == AlertType.ROLLING_WINDOW }
+        assertTrue((fired.triggerVolumeBytes ?: 0L) >= settings.rollingAlertBytes)
+        assertTrue((fired.triggerVolumeBytes ?: 0L) <= expected)
+    }
+
 
     private fun sample(
         elapsed: Long,

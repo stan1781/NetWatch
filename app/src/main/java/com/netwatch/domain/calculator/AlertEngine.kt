@@ -40,6 +40,19 @@ class AlertEngine {
             return emptyList()
         }
 
+        val intervalMs = lastSampleElapsed?.let { sample.elapsedRealtimeMs - it }?.coerceAtLeast(1L)
+            ?: settings.sampleIntervalMs.toLong().coerceAtLeast(1L)
+        // Defense in depth: a physically impossible increment must not enter
+        // the rolling window or extend a high-speed streak, even if the
+        // sampler failed to mark it as a baseline reset.
+        if (TrafficPlausibility.isImplausibleDelta(sample.mobileDelta.total, intervalMs) ||
+            TrafficPlausibility.isImplausibleDelta(sample.billableMobileDelta.total, intervalMs)
+        ) {
+            highSpeedStreakMs = 0L
+            lastSampleElapsed = sample.elapsedRealtimeMs
+            return emptyList()
+        }
+
         val windowMs = settings.rollingWindowSeconds.coerceAtLeast(1) * 1000L
         recent.addLast(sample)
         while (recent.isNotEmpty() && sample.elapsedRealtimeMs - recent.first().elapsedRealtimeMs > windowMs) {

@@ -68,6 +68,17 @@ data class SpeedSample(
      */
     val mobileCountersUnreliable: Boolean
         get() = !path.billableMobile && mobileDelta.total > 0L
+
+    /** Drop this interval's bytes and treat it as a counter discontinuity. */
+    fun asBaselineReset(): SpeedSample = copy(
+        downloadBytesPerSec = 0,
+        uploadBytesPerSec = 0,
+        totalDownloadBytesPerSec = 0,
+        totalUploadBytesPerSec = 0,
+        mobileDelta = ByteVolume(0, 0),
+        totalDelta = ByteVolume(0, 0),
+        baselineReset = true,
+    )
 }
 
 data class TrafficPeriod(

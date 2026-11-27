@@ -3,7 +3,6 @@ package com.netwatch.service
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.net.TrafficStats
 import android.os.IBinder
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
@@ -12,6 +11,7 @@ import com.netwatch.core.network.TrafficStatsSampler
 import com.netwatch.core.util.ByteFormatter
 import com.netwatch.core.util.TimeUtils
 import com.netwatch.domain.calculator.AlertEngine
+import com.netwatch.domain.calculator.PostSwitchSettler
 import com.netwatch.domain.model.ByteVolume
 import com.netwatch.domain.model.DataConfidence
 import com.netwatch.domain.model.NetworkKind
@@ -35,6 +35,7 @@ import kotlinx.coroutines.withContext
 class TrafficMonitorService : LifecycleService() {
     private val sampler = TrafficStatsSampler()
     private val alertEngine = AlertEngine()
+    private val postSwitchSettler = PostSwitchSettler()
     private var loop: Job? = null
     private var lastDefaultSub: Int? = null
     private var lastTethering: Boolean = false
@@ -114,17 +115,18 @@ class TrafficMonitorService : LifecycleService() {
                     sampler.resetBaseline()
                     alertEngine.resetBaselines()
                     lastDefaultSub = defaultSub
+                    postSwitchSettler.onDefaultDataSwitch()
                     container.simManager.persistIdentityChanges(sim)
                 }
                 val tethering = lastTethering || container.hotspotMonitor.currentStatus().isTethering
                 val network = container.networkStateMonitor.current(isTethering = tethering)
-                val raw = if (resetNeeded) {
-                    sampler.sample(now, sim.defaultDataSubscriptionId, sim.defaultDataSlotIndex)
-                        .copy(baselineReset = true)
+                val raw = sampler.sample(now, sim.defaultDataSubscriptionId, sim.defaultDataSlotIndex)
+                val settle = resetNeeded || postSwitchSettler.consumePending()
+                val sample = if (settle || raw.baselineReset) {
+                    raw.asBaselineReset().copy(path = network.path)
                 } else {
-                    sampler.sample(now, sim.defaultDataSubscriptionId, sim.defaultDataSlotIndex)
+                    raw.copy(path = network.path)
                 }
-                val sample = raw.copy(path = network.path)
 
                 samples.value = (samples.value + sample).takeLast(MAX_SAMPLES)
                 latestSample.value = sample
@@ -134,9 +136,9 @@ class TrafficMonitorService : LifecycleService() {
                         container.networkStatsRepository.recordAttributedDelta(sample)
                     }
                     if (settings.hotspotMonitoringEnabled) {
-                        container.hotspotMonitor.accumulate(
-                            TrafficStats.getMobileRxBytes(),
-                            TrafficStats.getMobileTxBytes(),
+                        container.hotspotMonitor.addDelta(
+                            sample.mobileDelta.rxBytes,
+                            sample.mobileDelta.txBytes,
                         )
                         val open = container.hotspotRepository.open()
                         val live = container.hotspotMonitor.snapshotSession(

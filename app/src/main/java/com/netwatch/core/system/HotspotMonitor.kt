@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.TetheringInterface
 import android.net.TetheringManager
 import android.net.TrafficStats
+import com.netwatch.domain.calculator.TrafficPlausibility
 import com.netwatch.domain.model.DataConfidence
 import com.netwatch.domain.model.HotspotSession
 import com.netwatch.domain.model.HotspotStatus
@@ -87,13 +88,31 @@ class HotspotMonitor(private val context: Context) {
         awaitClose { manager.unregisterTetheringEventCallback(callback) }
     }
 
-    fun accumulate(mobileRx: Long, mobileTx: Long) {
+    /**
+     * Adds already-sanitized TrafficStats deltas from the current sample.
+     * Callers must not pass a jump that should have been treated as a reset.
+     */
+    fun addDelta(rxBytes: Long, txBytes: Long) {
         val session = live.get() ?: return
-        if (mobileRx >= 0 && session.lastMobileRx >= 0 && mobileRx >= session.lastMobileRx) {
-            session.rxBytes += mobileRx - session.lastMobileRx
+        if (rxBytes > 0L) session.rxBytes += rxBytes
+        if (txBytes > 0L) session.txBytes += txBytes
+    }
+
+    fun accumulate(mobileRx: Long, mobileTx: Long, elapsedMs: Long = 1000L) {
+        val session = live.get() ?: return
+        val rxDelta = if (mobileRx >= 0 && session.lastMobileRx >= 0) {
+            (mobileRx - session.lastMobileRx).coerceAtLeast(0L)
+        } else {
+            0L
         }
-        if (mobileTx >= 0 && session.lastMobileTx >= 0 && mobileTx >= session.lastMobileTx) {
-            session.txBytes += mobileTx - session.lastMobileTx
+        val txDelta = if (mobileTx >= 0 && session.lastMobileTx >= 0) {
+            (mobileTx - session.lastMobileTx).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        if (!TrafficPlausibility.isImplausibleDelta(rxDelta + txDelta, elapsedMs)) {
+            if (rxDelta > 0L) session.rxBytes += rxDelta
+            if (txDelta > 0L) session.txBytes += txDelta
         }
         session.lastMobileRx = mobileRx
         session.lastMobileTx = mobileTx
